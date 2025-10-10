@@ -4,7 +4,7 @@ A little exercise to build a web application following an agile development proc
 
 ## Product vision statement
 
-See instructions. Delete this line and place the Product Vision Statement here.
+A simple web app to help students organize, prioritize, and keep track of their homework and tasks efficiently.
 
 ## User stories
 
