@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="topbar">
+  <h1>Homework</h1>
+  <div class="row">
+    <button id="addBtn" class="btn-primary">Add</button>
+    <!-- placeholder; appears only after Add is clicked -->
+    <button id="newAssignmentBtn" class="btn-secondary hidden" aria-hidden="true">New Assignment</button>
+  </div>
+</header>
+
+<!-- Full-height empty state under the header -->
+<section id="emptyState" class="empty empty-full hidden">No Current Assignments</section>
+
+<!-- Populated when there are assignments -->
+<section id="list" class="list"></section>
+{% endblock %}
