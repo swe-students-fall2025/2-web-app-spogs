@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, date
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, redirect, url_for, request, jsonify
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 
@@ -22,6 +22,7 @@ def serialize(doc):
         "course": doc.get("course", ""),
         "notes": doc.get("notes", ""),
         "due_date": (doc.get("due_date").strftime("%Y-%m-%d") if isinstance(doc.get("due_date"), (datetime, date)) else doc.get("due_date", "")),
+        "priority": doc.get("priority", 2),
         "completed": bool(doc.get("completed", False)),
         "created_at": (doc.get("created_at").isoformat() if isinstance(doc.get("created_at"), datetime) else None),
         "updated_at": (doc.get("updated_at").isoformat() if isinstance(doc.get("updated_at"), datetime) else None),
@@ -40,6 +41,55 @@ def list_assignments():
     cur = col.find({}).sort([("due_date", 1), ("created_at", -1)])
     return jsonify([serialize(d) for d in cur])
 
+@app.route("/add", methods=["GET", "POST"])
+def add_assignment():
+    """
+    Route for GET and POST requests to the add assignment page.
+    GET: Displays a form users can fill out to create a new assignment.
+    POST: Accepts the form submission data for a new assignment and saves it to the database.
+    Returns:
+        GET: rendered template (str): The rendered HTML template.
+        POST: redirect (Response): A redirect response to the home page.
+    """
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        course = request.form.get("course", "").strip()
+        notes = request.form.get("notes", "").strip()
+        due_date_str = request.form.get("due_date", "").strip()
+        
+        # Handle priority - convert to int or default to 2
+        priority_str = request.form.get("priority", "").strip()
+        priority = int(priority_str) if priority_str else 2
+        
+        if not title or not due_date_str:
+            return "Error: Title and due date are required", 400
+        
+        try:
+            due_date = date.fromisoformat(due_date_str)
+            # Convert date to datetime for MongoDB (BSON requires datetime, not date)
+            due_datetime = datetime.combine(due_date, datetime.min.time())
+        except ValueError:
+            return "Error: Invalid due date format", 400
+        
+        now = datetime.utcnow()
+        doc = {
+            "title": title,
+            "course": course,
+            "notes": notes,
+            "due_date": due_datetime,
+            "priority": priority,
+            "completed": False,
+            "created_at": now,
+            "updated_at": now
+        }
+        
+        col.insert_one(doc)
+        return redirect(url_for("index"))
+    
+    
+    return render_template("add_assignment.html")
+
+"""
 @app.post("/api/assignments")
 def create_assignment():
     p = request.get_json(force=True)
@@ -65,6 +115,7 @@ def create_assignment():
     }
     _id = col.insert_one(doc).inserted_id
     return jsonify(serialize(col.find_one({"_id": _id}))), 201
+"""
 
 @app.patch("/api/assignments/<string:assignment_id>")
 def update_assignment(assignment_id):
@@ -98,6 +149,7 @@ def delete_assignment(assignment_id):
         return jsonify({"error": "invalid id"}), 400
     col.delete_one({"_id": oid})
     return ("", 204)
+
 
 if __name__ == "__main__":
     app.run(debug=True)
