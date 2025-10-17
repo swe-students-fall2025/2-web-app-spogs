@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="topbar">
+  <h1>Help & Info</h1>
+  <button class="btn-primary" onclick="window.location.href='/'">Back</button>
+</header>
+
+<section class="card" style="margin-top: 16px;">
+  <h2 style="margin-top: 0;">Using This App</h2>
+  <p>
+    This homework tracker helps you manage assignments across your courses.  
+    You can add, edit, mark complete, or delete assignments. All changes are automatically saved.
+  </p>
+
+  <ul style="line-height: 1.6;">
+    <li><b>Add:</b> Click “Add” to create a new assignment.</li>
+    <li><b>Edit:</b> Click “Edit” to modify details.</li>
+    <li><b>Complete:</b> Check the box to mark an item done.</li>
+    <li><b>Delete:</b> Click the trash icon to remove an assignment.</li>
+  </ul>
+
+  <p style="opacity: 0.8;">
+    If you encounter any issues, refer back to the README.md file
+  </p>
+</section>
+{% endblock %}

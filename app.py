@@ -101,3 +101,12 @@ def delete_assignment(assignment_id):
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+@app.route("/delete")
+def delete_page():
+    return render_template("delete.html")
+
+@app.route("/help")
+def help_page():
+    return render_template("help.html")
+

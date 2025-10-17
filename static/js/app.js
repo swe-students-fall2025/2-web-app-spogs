@@ -4,6 +4,11 @@ const emptyEl = document.getElementById("emptyState");
 
 const openBtn = document.getElementById("addBtn");
 
+const helpBtn = document.getElementById("helpBtn");
+helpBtn.addEventListener("click", () => {
+  window.location.href = "/help";
+});
+
 // Wiring for Galal to implement later
 openBtn.addEventListener("click", () => {
     console.log("TODO: implement New Assignment flow in a separate task.");
@@ -83,10 +88,16 @@ function card(a) {
 
   const delBtn = document.createElement("button");
   delBtn.className = "btn-icon";
-  delBtn.textContent = "Del";
+  delBtn.innerHTML = `
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+       width="18" height="18" fill="currentColor">
+    <path d="M9 3v1H4v2h16V4h-5V3H9zm1 6v9h2V9h-2zm4 0v9h2V9h-2zM6 6v14
+             c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6H6z"/>
+  </svg>`;
   delBtn.addEventListener("click", () => destroy(a.id));
 
   actions.append(editBtn, delBtn);
+  head.append(left, actions);
 
   const meta = document.createElement("div");
   meta.className = "meta";

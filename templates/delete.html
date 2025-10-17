@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar">
+  <h1>Delete Assignments</h1>
+  <a href="/" class="btn-primary">Home</a>
+</div>
+
+<p class="meta">Select an assignment to delete.</p>
+
+<div id="assignmentList" class="list"></div>
+
+<!-- Preventing Accidental Deletion -->
+<div id="deleteModal" class="sheet hidden">
+  <div class="sheet-content">
+    <div class="sheet-head">
+      <h3>Confirm Deletion</h3>
+      <button class="icon" id="cancelDelete">&times;</button>
+    </div>
+    <p>Are you sure you want to delete this assignment? This action cannot be undone.</p>
+    <div class="row" style="justify-content: flex-end; margin-top: 16px;">
+      <button class="btn-primary" id="confirmDelete" style="background: var(--danger); color: white;">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let pendingDeleteId = null;
+
+// display current assignments
+async function fetchAssignments() {
+  const res = await fetch("/api/assignments");
+  const data = await res.json();
+  const list = document.getElementById("assignmentList");
+  list.innerHTML = "";
+
+  if (data.length === 0) {
+    list.innerHTML = '<div class="empty-full"><p class="empty">No assignments available.</p></div>';
+    return;
+  }
+
+  data.forEach(a => {
+    const div = document.createElement("div");
+    div.className = "card";
+    div.innerHTML = `
+      <div class="card-head">
+        <span class="title">${a.title}</span>
+        <button class="btn-icon" onclick="showDeleteModal('${a.id}')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M9 3v1H4v2h16V4h-5V3H9zm1 6v9h2V9h-2zm4 0v9h2V9h-2zM6 6v14c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6H6z"/>
+          </svg>
+        </button>
+      </div>
+      <div class="meta">${a.course ? a.course : ""} • Due: ${a.due_date}</div>
+      <p>${a.notes || ""}</p>
+    `;
+    list.appendChild(div);
+  });
+}
+// Shows a Modal To Confirm Deletion
+function showDeleteModal(id) {
+  pendingDeleteId = id;
+  document.getElementById("deleteModal").classList.remove("hidden");
+}
+
+// Hide Modal Again
+document.getElementById("cancelDelete").onclick = () => {
+  document.getElementById("deleteModal").classList.add("hidden");
+  pendingDeleteId = null;
+};
+
+// After Deletion Reset the List
+document.getElementById("confirmDelete").onclick = async () => {
+  if (!pendingDeleteId) return;
+  const res = await fetch(`/api/assignments/${pendingDeleteId}`, { method: "DELETE" });
+  if (res.status === 204) {
+    fetchAssignments();
+  } else {
+    alert("Delete failed.");
+  }
+  document.getElementById("deleteModal").classList.add("hidden");
+  pendingDeleteId = null;
+};
+
+fetchAssignments();
+</script>
+{% endblock %}
