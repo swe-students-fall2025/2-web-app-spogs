@@ -1,0 +1,10 @@
+<!-- form used to create new assignments -->
+
+<h2>Create New Assignment</h2>
+<form method="POST" action="{{ url_for('add_assignment') }}">
+    <input type="text" id="title" name="title" placeholder="Assignment Title" required/>  
+    <input type="text" id="course" name="course" placeholder="Course Name"/>
+    <input type="date" id="due_date" name="due_date" required/>
+    <textarea id="notes" name="notes" placeholder="Notes (optional)"></textarea>
+    <input type="submit" value="Save"/>
+</form>
