@@ -52,14 +52,82 @@ def group_by_date(assignments):
         groups[label].append(a)
     return groups
 
+def calculate_assignment_status(assignment):
+    """
+    Calculate status flags for an assignment.
+    
+    Args:
+        assignment: Assignment dictionary with due_date and completed fields
+    
+    Returns:
+        Dictionary with 'is_overdue' and 'is_due_soon' boolean flags
+    """
+    status = {
+        'is_overdue': False,
+        'is_due_soon': False
+    }
+    
+    if assignment.get('completed', False):
+        return status
+    
+    due = assignment.get('due_date')
+    if not due:
+        return status
+    
+    # Convert due_date to datetime for comparison
+    try:
+        if isinstance(due, str):
+            due_datetime = datetime.strptime(due, "%Y-%m-%d")
+        elif isinstance(due, date) and not isinstance(due, datetime):
+            due_datetime = datetime.combine(due, datetime.min.time())
+        elif isinstance(due, datetime):
+            due_datetime = due
+        else:
+            return status
+        
+        now = datetime.now()
+        # Normalize to midnight for comparison
+        now_midnight = datetime.combine(now.date(), datetime.min.time())
+        due_midnight = datetime.combine(due_datetime.date(), datetime.min.time())
+        
+        if due_midnight < now_midnight:
+            status['is_overdue'] = True
+        
+        # If due date is within 24 hours, the assignment is "due soon"
+        time_until_due = due_datetime - now
+        if timedelta(0) <= time_until_due <= timedelta(hours=24):
+            status['is_due_soon'] = True
+            
+    except (ValueError, AttributeError, TypeError):
+        pass
+    
+    return status
+
 with app.app_context():
     col.create_index([("due_date", 1)])
     col.create_index([("created_at", -1)])
+    col.create_index([("course", 1)])
+    col.create_index([("updated_at", -1)])
+    col.create_index([("completed", 1), ("updated_at", -1)])
 
 @app.get("/")
 def index():
-    cursor = col.find({}).sort([("due_date", 1), ("created_at", -1)])
+    twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
+    
+    # Exclude assignments which were marked "complete" more than 24 hours ago
+    query = {
+        "$or": [
+            {"completed": {"$ne": True}},
+            {"completed": True, "updated_at": {"$gte": twenty_four_hours_ago}}
+        ]
+    }
+    
+    cursor = col.find(query).sort([("due_date", 1), ("created_at", -1)])
     assignments = [serialize_assignment(doc) for doc in cursor]
+    
+    for assignment in assignments:
+        status = calculate_assignment_status(assignment)
+        assignment.update(status)
     
     grouped_assignments = group_by_date(assignments)
     

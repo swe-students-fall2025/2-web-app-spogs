@@ -157,6 +157,16 @@ body {
     opacity: 0.5;
 }
 
+.assignment-due-soon {
+    background: rgba(234, 179, 8, 0.25) !important;
+    border: 1px solid rgba(234, 179, 8, 0.4);
+}
+
+.assignment-overdue {
+    background: rgba(220, 38, 38, 0.25) !important;
+    border: 1px solid rgba(220, 38, 38, 0.4);
+}
+
 .meta { 
     font-size: 12px; 
     color: var(--muted); 
