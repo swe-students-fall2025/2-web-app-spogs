@@ -4,9 +4,9 @@ const emptyEl = document.getElementById("emptyState");
 
 const openBtn = document.getElementById("addBtn");
 
-// Wiring for Galal to implement later
+// Navigate to the add assignment page
 openBtn.addEventListener("click", () => {
-    console.log("TODO: implement New Assignment flow in a separate task.");
+    window.location.href = "/add";
 });
 
 async function fetchAssignments() {
