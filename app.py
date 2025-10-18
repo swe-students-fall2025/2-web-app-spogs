@@ -149,12 +149,16 @@ def add_assignment():
             priority_str = request.form.get("priority", "").strip()
             priority = int(priority_str) if priority_str else 2
             
+            estimated_time_str = request.form.get("estimated_time", "").strip()
+            estimated_time = int(estimated_time_str) if estimated_time_str else None
+            
             assignment_data = AssignmentCreate(
                 title=request.form.get("title", ""),
                 course=request.form.get("course", ""),
                 notes=request.form.get("notes", ""),
                 due_date=date.fromisoformat(request.form.get("due_date", "")),
                 priority=priority,
+                estimated_time=estimated_time,
                 completed=False
             )
             
@@ -225,12 +229,16 @@ def edit_assignment(assignment_id):
             priority_str = request.form.get("priority", "").strip()
             priority = int(priority_str) if priority_str else 2
             
+            estimated_time_str = request.form.get("estimated_time", "").strip()
+            estimated_time = int(estimated_time_str) if estimated_time_str else None
+            
             assignment_data = AssignmentUpdate(
                 title=request.form.get("title", ""),
                 course=request.form.get("course", ""),
                 notes=request.form.get("notes", ""),
                 due_date=date.fromisoformat(request.form.get("due_date", "")),
-                priority=priority
+                priority=priority,
+                estimated_time=estimated_time
             )
             
             update_doc = assignment_update_to_dict(assignment_data)

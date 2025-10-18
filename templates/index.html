@@ -38,6 +38,9 @@
             {% endif %}
             <span>{{ assignment.due_date }}</span>
             <span class="badge">P{{ assignment.priority }}</span>
+            {% if assignment.estimated_time %}
+              <span class="badge">{{ assignment.estimated_time }}m</span>
+            {% endif %}
           </div>
           {% if assignment.notes %}
             <div style="font-size: 13px; opacity: 0.9;">{{ assignment.notes }}</div>
