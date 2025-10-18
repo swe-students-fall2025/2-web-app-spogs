@@ -1,7 +1,9 @@
 import os
-from datetime import datetime, date
+import csv
+from io import StringIO
+from datetime import datetime, date, timedelta
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import Flask, render_template, redirect, url_for, request, flash, Response
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from collections import defaultdict
@@ -182,6 +184,195 @@ def edit_assignment(assignment_id):
     # GET request: show edit form
     assignment = serialize_assignment(doc)
     return render_template("edit_assignment.html", assignment=assignment)
+
+@app.route("/search")
+def search():
+    """Search and filter assignments"""
+    text_query = request.args.get("q", "").strip()
+    course_filter = request.args.get("course", "").strip()
+    due_start = request.args.get("due_start", "").strip()
+    due_end = request.args.get("due_end", "").strip()
+    time_min = request.args.get("time_min", "").strip()
+    time_max = request.args.get("time_max", "").strip()
+    show_completed = request.args.get("show_completed", "").lower() == "true"
+    
+    query = {}
+    
+    # Text search on title and notes
+    if text_query:
+        query["$or"] = [
+            {"title": {"$regex": text_query, "$options": "i"}},
+            {"notes": {"$regex": text_query, "$options": "i"}}
+        ]
+    
+    # Course filter
+    if course_filter:
+        query["course"] = course_filter
+    
+    # Due date range filter
+    if due_start or due_end:
+        date_query = {}
+        if due_start:
+            try:
+                start_datetime = datetime.combine(
+                    date.fromisoformat(due_start),
+                    datetime.min.time()
+                )
+                date_query["$gte"] = start_datetime
+            except ValueError:
+                pass
+        if due_end:
+            try:
+                end_datetime = datetime.combine(
+                    date.fromisoformat(due_end),
+                    datetime.max.time()
+                )
+                date_query["$lte"] = end_datetime
+            except ValueError:
+                pass
+        if date_query:
+            query["due_date"] = date_query
+    
+    # Estimated time filter
+    if time_min or time_max:
+        time_query = {}
+        if time_min:
+            try:
+                time_query["$gte"] = int(time_min)
+            except ValueError:
+                pass
+        if time_max:
+            try:
+                time_query["$lte"] = int(time_max)
+            except ValueError:
+                pass
+        if time_query:
+            query["estimated_time"] = time_query
+    
+    # If show_completed is True, show all assignments. If false, show only uncompleted assignments
+    if not show_completed:
+        query["completed"] = {"$ne": True}
+    
+    # Limit to 100 results for performance
+    cursor = col.find(query).sort([("due_date", 1), ("created_at", -1)]).limit(100)
+    assignments = [serialize_assignment(doc) for doc in cursor]
+    
+    for assignment in assignments:
+        status = calculate_assignment_status(assignment)
+        assignment.update(status)
+    
+    all_courses = col.distinct("course", {"course": {"$ne": ""}})
+    
+    filters = {
+        "q": text_query,
+        "course": course_filter,
+        "due_start": due_start,
+        "due_end": due_end,
+        "time_min": time_min,
+        "time_max": time_max,
+        "show_completed": show_completed
+    }
+    
+    return render_template(
+        "search.html",
+        assignments=assignments,
+        all_courses=sorted(all_courses),
+        filters=filters,
+        has_results=len(assignments) > 0
+    )
+
+@app.route("/export")
+def export_assignments():
+    """Export filtered assignments as CSV"""
+    text_query = request.args.get("q", "").strip()
+    course_filter = request.args.get("course", "").strip()
+    due_start = request.args.get("due_start", "").strip()
+    due_end = request.args.get("due_end", "").strip()
+    time_min = request.args.get("time_min", "").strip()
+    time_max = request.args.get("time_max", "").strip()
+    show_completed = request.args.get("show_completed", "").lower() == "true"
+    
+    query = {}
+    
+    if text_query:
+        query["$or"] = [
+            {"title": {"$regex": text_query, "$options": "i"}},
+            {"notes": {"$regex": text_query, "$options": "i"}}
+        ]
+    
+    if course_filter:
+        query["course"] = course_filter
+    
+    if due_start or due_end:
+        date_query = {}
+        if due_start:
+            try:
+                start_datetime = datetime.combine(
+                    date.fromisoformat(due_start),
+                    datetime.min.time()
+                )
+                date_query["$gte"] = start_datetime
+            except ValueError:
+                pass
+        if due_end:
+            try:
+                end_datetime = datetime.combine(
+                    date.fromisoformat(due_end),
+                    datetime.max.time()
+                )
+                date_query["$lte"] = end_datetime
+            except ValueError:
+                pass
+        if date_query:
+            query["due_date"] = date_query
+    
+    if time_min or time_max:
+        time_query = {}
+        if time_min:
+            try:
+                time_query["$gte"] = int(time_min)
+            except ValueError:
+                pass
+        if time_max:
+            try:
+                time_query["$lte"] = int(time_max)
+            except ValueError:
+                pass
+        if time_query:
+            query["estimated_time"] = time_query
+    
+    # If show_completed is True, show all assignments. If false, show only uncompleted assignments
+    if not show_completed:
+        query["completed"] = {"$ne": True}
+    
+    cursor = col.find(query).sort([("due_date", 1), ("created_at", -1)])
+    assignments = [serialize_assignment(doc) for doc in cursor]
+    
+    # Generate CSV
+    output = StringIO()
+    writer = csv.writer(output)
+    
+    # Header
+    writer.writerow(["Title", "Course", "Due Date", "Priority", "Estimated Time (min)", "Notes", "Completed"])
+    
+    # Data
+    for assignment in assignments:
+        writer.writerow([
+            assignment.get("title", ""),
+            assignment.get("course", ""),
+            assignment.get("due_date", ""),
+            assignment.get("priority", ""),
+            assignment.get("estimated_time", "") or "",
+            assignment.get("notes", ""),
+            "Yes" if assignment.get("completed", False) else "No"
+        ])
+    
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=assignments.csv"}
+    )
 
 
 if __name__ == "__main__":
