@@ -1,12 +1,24 @@
 import os
 from datetime import datetime, date
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, request, jsonify
+from flask import Flask, render_template, redirect, url_for, request, flash
 from pymongo import MongoClient
 from bson.objectid import ObjectId
+from collections import defaultdict
+from pydantic import ValidationError
+
+from models import (
+    AssignmentCreate,
+    AssignmentUpdate,
+    assignment_to_dict,
+    assignment_update_to_dict,
+    serialize_assignment
+)
 
 load_dotenv()
 app = Flask(__name__)
+# Work in Progress: Use secret key for user authentication
+app.secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 client = MongoClient(
     os.getenv("MONGO_URI"),
     username=os.getenv("MONGO_USER"),
@@ -15,18 +27,28 @@ client = MongoClient(
 db = client["homeworkdb"]
 col = db["assignments"]
 
-def serialize(doc):
-    return {
-        "id": str(doc["_id"]),
-        "title": doc.get("title", ""),
-        "course": doc.get("course", ""),
-        "notes": doc.get("notes", ""),
-        "due_date": (doc.get("due_date").strftime("%Y-%m-%d") if isinstance(doc.get("due_date"), (datetime, date)) else doc.get("due_date", "")),
-        "priority": doc.get("priority", 2),
-        "completed": bool(doc.get("completed", False)),
-        "created_at": (doc.get("created_at").isoformat() if isinstance(doc.get("created_at"), datetime) else None),
-        "updated_at": (doc.get("updated_at").isoformat() if isinstance(doc.get("updated_at"), datetime) else None),
-    }
+def group_by_date(assignments):
+    """Group assignments by due date with formatted labels"""
+    groups = defaultdict(list)
+    for a in assignments:
+        due = a.get('due_date')
+        try:
+            # Handle datetime objects
+            if isinstance(due, datetime):
+                label = due.strftime("%a, %b %d")
+            # Handle date objects
+            elif isinstance(due, date):
+                label = due.strftime("%a, %b %d")
+            # Handle string dates (from serialization)
+            elif isinstance(due, str):
+                due_date = datetime.strptime(due, "%Y-%m-%d")
+                label = due_date.strftime("%a, %b %d")
+            else:
+                label = "Unknown"
+        except (ValueError, AttributeError):
+            label = "Unknown"
+        groups[label].append(a)
+    return groups
 
 with app.app_context():
     col.create_index([("due_date", 1)])
@@ -34,12 +56,12 @@ with app.app_context():
 
 @app.get("/")
 def index():
-    return render_template("index.html")
-
-@app.get("/api/assignments")
-def list_assignments():
-    cur = col.find({}).sort([("due_date", 1), ("created_at", -1)])
-    return jsonify([serialize(d) for d in cur])
+    cursor = col.find({}).sort([("due_date", 1), ("created_at", -1)])
+    assignments = [serialize_assignment(doc) for doc in cursor]
+    
+    grouped_assignments = group_by_date(assignments)
+    
+    return render_template("index.html", grouped_assignments=grouped_assignments, has_assignments=len(assignments) > 0)
 
 @app.route("/add", methods=["GET", "POST"])
 def add_assignment():
@@ -52,104 +74,115 @@ def add_assignment():
         POST: redirect (Response): A redirect response to the home page.
     """
     if request.method == "POST":
-        title = request.form.get("title", "").strip()
-        course = request.form.get("course", "").strip()
-        notes = request.form.get("notes", "").strip()
-        due_date_str = request.form.get("due_date", "").strip()
-        
-        # Handle priority - convert to int or default to 2
-        priority_str = request.form.get("priority", "").strip()
-        priority = int(priority_str) if priority_str else 2
-        
-        if not title or not due_date_str:
-            return "Error: Title and due date are required", 400
-        
         try:
-            due_date = date.fromisoformat(due_date_str)
-            # Convert date to datetime for MongoDB (BSON requires datetime, not date)
-            due_datetime = datetime.combine(due_date, datetime.min.time())
-        except ValueError:
-            return "Error: Invalid due date format", 400
-        
-        now = datetime.utcnow()
-        doc = {
-            "title": title,
-            "course": course,
-            "notes": notes,
-            "due_date": due_datetime,
-            "priority": priority,
-            "completed": False,
-            "created_at": now,
-            "updated_at": now
-        }
-        
-        col.insert_one(doc)
-        return redirect(url_for("index"))
-    
+            # If priority is not provided, default to 2
+            priority_str = request.form.get("priority", "").strip()
+            priority = int(priority_str) if priority_str else 2
+            
+            assignment_data = AssignmentCreate(
+                title=request.form.get("title", ""),
+                course=request.form.get("course", ""),
+                notes=request.form.get("notes", ""),
+                due_date=date.fromisoformat(request.form.get("due_date", "")),
+                priority=priority,
+                completed=False
+            )
+            
+            doc = assignment_to_dict(assignment_data)
+            col.insert_one(doc)
+            
+            flash("Assignment created successfully!", "success")
+            return redirect(url_for("index"))
+            
+        except ValueError as e:
+            flash(f"Error: Invalid date format - {str(e)}", "error")
+            return render_template("add_assignment.html"), 400
+        except ValidationError as e:
+            errors = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
+            flash(f"Validation error: {errors}", "error")
+            return render_template("add_assignment.html"), 400
     
     return render_template("add_assignment.html")
 
-"""
-@app.post("/api/assignments")
-def create_assignment():
-    p = request.get_json(force=True)
-    title = (p.get("title") or "").strip()
-    due_raw = p.get("due_date")
-    course = (p.get("course") or "").strip()
-    notes = (p.get("notes") or "").strip()
-    if not title or not due_raw:
-        return jsonify({"error": "title and due_date required"}), 400
-    try:
-        due = date.fromisoformat(due_raw)
-    except ValueError:
-        return jsonify({"error": "invalid due_date"}), 400
-    now = datetime.utcnow()
-    doc = {
-        "title": title,
-        "course": course,
-        "notes": notes,
-        "due_date": due,
-        "completed": bool(p.get("completed", False)),
-        "created_at": now,
-        "updated_at": now,
-    }
-    _id = col.insert_one(doc).inserted_id
-    return jsonify(serialize(col.find_one({"_id": _id}))), 201
-"""
-
-@app.patch("/api/assignments/<string:assignment_id>")
-def update_assignment(assignment_id):
+@app.post("/toggle/<string:assignment_id>")
+def toggle_assignment(assignment_id):
+    """Toggle the completed status of an assignment"""
     try:
         oid = ObjectId(assignment_id)
     except Exception:
-        return jsonify({"error": "invalid id"}), 400
-    p = request.get_json(force=True)
-    update = {}
-    if "title" in p: update["title"] = (p["title"] or "").strip()
-    if "course" in p: update["course"] = (p["course"] or "").strip()
-    if "notes" in p: update["notes"] = (p["notes"] or "").strip()
-    if "completed" in p: update["completed"] = bool(p["completed"])
-    if "due_date" in p:
-        try:
-            update["due_date"] = date.fromisoformat(p["due_date"])
-        except ValueError:
-            return jsonify({"error": "invalid due_date"}), 400
-    update["updated_at"] = datetime.utcnow()
-    col.update_one({"_id": oid}, {"$set": update})
+        return "Invalid assignment ID", 400
+    
     doc = col.find_one({"_id": oid})
     if not doc:
-        return jsonify({"error": "not found"}), 404
-    return jsonify(serialize(doc))
+        return "Assignment not found", 404
+    
+    new_completed = not bool(doc.get("completed", False))
+    col.update_one(
+        {"_id": oid},
+        {"$set": {"completed": new_completed, "updated_at": datetime.utcnow()}}
+    )
+    
+    return redirect(url_for("index"))
 
-@app.delete("/api/assignments/<string:assignment_id>")
+@app.post("/delete/<string:assignment_id>")
 def delete_assignment(assignment_id):
+    """Delete an assignment"""
     try:
         oid = ObjectId(assignment_id)
     except Exception:
-        return jsonify({"error": "invalid id"}), 400
+        return "Invalid assignment ID", 400
+    
     col.delete_one({"_id": oid})
-    return ("", 204)
+    return redirect(url_for("index"))
+
+@app.route("/edit/<string:assignment_id>", methods=["GET", "POST"])
+def edit_assignment(assignment_id):
+    """Edit an existing assignment"""
+    try:
+        oid = ObjectId(assignment_id)
+    except Exception:
+        flash("Invalid assignment ID", "error")
+        return redirect(url_for("index"))
+    
+    doc = col.find_one({"_id": oid})
+    if not doc:
+        flash("Assignment not found", "error")
+        return redirect(url_for("index"))
+    
+    if request.method == "POST":
+        try:
+            # If priority is not provided, default to 2
+            priority_str = request.form.get("priority", "").strip()
+            priority = int(priority_str) if priority_str else 2
+            
+            assignment_data = AssignmentUpdate(
+                title=request.form.get("title", ""),
+                course=request.form.get("course", ""),
+                notes=request.form.get("notes", ""),
+                due_date=date.fromisoformat(request.form.get("due_date", "")),
+                priority=priority
+            )
+            
+            update_doc = assignment_update_to_dict(assignment_data)
+            col.update_one({"_id": oid}, {"$set": update_doc})
+            
+            flash("Assignment updated successfully!", "success")
+            return redirect(url_for("index"))
+            
+        except ValueError as e:
+            flash(f"Error: Invalid date format - {str(e)}", "error")
+            assignment = serialize_assignment(doc)
+            return render_template("edit_assignment.html", assignment=assignment), 400
+        except ValidationError as e:
+            errors = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
+            flash(f"Validation error: {errors}", "error")
+            assignment = serialize_assignment(doc)
+            return render_template("edit_assignment.html", assignment=assignment), 400
+    
+    # GET request: show edit form
+    assignment = serialize_assignment(doc)
+    return render_template("edit_assignment.html", assignment=assignment)
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=int(os.getenv("PORT", 10000)))
