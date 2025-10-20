@@ -48,7 +48,7 @@
     
     <div class="filter-group filter-toggle-group">
       <label class="filter-toggle">
-        <input type="checkbox" id="show_completed" name="show_completed" value="true" {% if filters.show_completed %}checked{% endif %} onchange="this.form.submit()"/>
+        <button type="submit" name="show_completed" value="{% if filters.show_completed %}false{% else %}true{% endif %}" class="checkbox-btn" style="margin-right: 8px;">{% if filters.show_completed %}☑{% else %}☐{% endif %}</button>
         <span>Show completed assignments</span>
       </label>
     </div>
@@ -70,7 +70,7 @@
         <div class="card-head">
           <div class="row">
             <form method="POST" action="{{ url_for('toggle_assignment', assignment_id=assignment.id) }}" style="margin: 0;">
-              <input type="checkbox" {% if assignment.completed %}checked{% endif %} onchange="this.form.submit()">
+              <button type="submit" class="checkbox-btn" title="Toggle completion">{% if assignment.completed %}☑{% else %}☐{% endif %}</button>
             </form>
             <div class="title {% if assignment.completed %}completed{% endif %}">
               {{ assignment.title }}
@@ -78,8 +78,8 @@
           </div>
           <div class="actions">
             <a href="{{ url_for('edit_assignment', assignment_id=assignment.id) }}" class="btn-icon">Edit</a>
-            <form method="POST" action="{{ url_for('delete_assignment', assignment_id=assignment.id) }}" style="display: inline; margin: 0;" onsubmit="return confirm('Delete this assignment?')">
-              <button type="submit" class="btn-icon">Del</button>
+            <form method="GET" action="{{ url_for('confirm_delete', assignment_id=assignment.id) }}" style="display: inline; margin: 0;">
+              <button type="submit" class="btn-icon" title="Delete">🗑️</button>
             </form>
           </div>
         </div>
