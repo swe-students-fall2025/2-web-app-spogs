@@ -14,7 +14,7 @@
         </label>
         <textarea id="notes" name="notes" placeholder="Notes (optional)">{{ assignment.notes }}</textarea>
         <input type="submit" value="Save"/>
-        <a href="/" class="btn-cancel">Cancel</a>
+        <a href="{{ url_for('index') }}" class="btn-cancel">Cancel</a>
     </form>
 </div>
 {% endblock %}

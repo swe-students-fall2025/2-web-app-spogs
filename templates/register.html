@@ -1,7 +1,8 @@
-{% extends "base.html" %} {% block content %}
+{% extends "base.html" %}
+{% block content %}
 <div class="form-container">
   <h2>Create Account</h2>
-  <form method="POST" action="/register">
+  <form method="POST" action="{{ url_for('register') }}">
     <input type="text" name="username" placeholder="Username" required />
     <input type="email" name="email" placeholder="Email" required />
     <input type="password" name="password" placeholder="Password" required />
@@ -12,7 +13,7 @@
       required
     />
     <input type="submit" value="Create Account" />
-    <a href="/login" class="btn-cancel">Already have an account? Login</a>
+    <a href="{{ url_for('login') }}" class="btn-cancel">Already have an account? Login</a>
   </form>
 </div>
 {% endblock %}

@@ -558,7 +558,7 @@ def register():
 
         users_col.insert_one(user_data)
         flash("Registration successful! Please login.", "success")
-        return redirect("/login")
+        return redirect(url_for("login"))
 
     return render_template("register.html")
 
@@ -580,6 +580,7 @@ def logout():
     return redirect(url_for("login"))
 
 @app.route("/help", methods=["GET"])
+@login_required
 def help_page():
     """Static help/info page"""
     return render_template("help.html")
@@ -587,18 +588,26 @@ def help_page():
 @app.route("/confirm_delete/<assignment_id>", methods=["GET", "POST"])
 @login_required
 def confirm_delete(assignment_id):
-    assignment = col.find_one({"_id": ObjectId(assignment_id)})
+    """Show confirmation page before deleting an assignment"""
+    try:
+        oid = ObjectId(assignment_id)
+    except Exception:
+        flash("Invalid assignment ID", "error")
+        return redirect(url_for("index"))
+    
+    assignment = col.find_one({"_id": oid, "user_id": current_user.id})
 
     if not assignment:
         flash("Assignment not found.", "error")
         return redirect(url_for("index"))
 
     if request.method == "POST":
-        col.delete_one({"_id": ObjectId(assignment_id)})
+        col.delete_one({"_id": oid, "user_id": current_user.id})
         flash(f'"{assignment["title"]}" deleted successfully.', "success")
         return redirect(url_for("index"))
 
-    return render_template("confirm_delete.html", assignment=assignment)
+    serialized_assignment = serialize_assignment(assignment)
+    return render_template("confirm_delete.html", assignment=serialized_assignment)
 
 if __name__ == "__main__":
     app.run(debug=True, port=int(os.getenv("PORT", 10000)))
